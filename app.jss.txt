@@ -1,20 +1,134 @@
- function generateSums() {
-  const num = parseInt(document.getElementById('numQuestions').value);
-  const output = document.getElementById('output');
-  output.innerHTML = '';
+// Utility random int inclusive
+function rnd(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-  for (let i = 1; i <= num; i++) {
-    // Generate random 2-digit numbers
-    const a = Math.floor(Math.random() * 90) + 10;
-    const b = Math.floor(Math.random() * 90) + 10;
-    const ans = a + b;
-
-    const div = document.createElement('div');
-    div.classList.add('question');
-    div.innerHTML = `<strong>${i}.</strong> ${a} + ${b} = <span style="color:green;">${ans}</span>`;
-    output.appendChild(div);
+// Generator settings by level
+function levelConfig(level, op){
+  if(level==='beginner'){
+    return { digitCount: (op==='*' || op==='/') ? 1 : 1, allowCarry:false, maxDigits:2 };
   }
+  if(level==='intermediate'){
+    return { digitCount: (op==='*' || op==='/') ? 1 : 2, allowCarry:true, maxDigits:3 };
+  }
+  return { digitCount: (op==='*' || op==='/') ? 2 : 3, allowCarry:true, maxDigits:4 };
 }
 
+// Generate single problem
+function generateProblem(op, level){
+  const cfg = levelConfig(level, op);
+  const digitCount = cfg.digitCount;
+  const maxDigits = cfg.maxDigits;
 
-  
+  const min = Math.pow(10, Math.max(0, digitCount-1));
+  const max = Math.pow(10, Math.min(maxDigits, digitCount) ) - 1;
+
+  if(op === '+'){
+    const a = rnd(min, max);
+    const b = cfg.allowCarry ? rnd(min, max) : rnd(min, Math.min(max, 9));
+    return { text: `${a} + ${b}`, a, b, op, answer: a + b };
+  }
+  if(op === '-'){
+    let a = rnd(min, max);
+    let b = rnd(min, max);
+    if(a < b) { const tmp=a; a=b; b=tmp; }
+    return { text: `${a} - ${b}`, a, b, op, answer: a - b };
+  }
+  if(op === '*'){
+    const a = rnd(min, max);
+    const b = rnd(1, Math.min(12, max)); // small multiplier
+    return { text: `${a} × ${b}`, a, b, op, answer: a * b };
+  }
+  if(op === '/'){
+    const b = rnd(1, Math.min(12, max)); // divisor
+    const q = rnd(Math.max(1, min), Math.min(50, max)); // quotient
+    const a = b * q + rnd(0, b-1); // dividend possibly with remainder
+    return { text: `${a} ÷ ${b}`, a, b, op, answer: Math.floor(a / b), remainder: a % b };
+  }
+  return null;
+}
+
+// Render set
+function renderProblems(problems, autoShow){
+  const area = document.getElementById('problemsArea');
+  area.innerHTML = '';
+  problems.forEach((p, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'problemBlock';
+    const prob = document.createElement('div');
+    prob.className = 'problem';
+    prob.textContent = (idx+1) + '.  ' + p.text;
+    div.appendChild(prob);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Type answer...';
+
+    const checkBtn = document.createElement('button');
+    checkBtn.textContent = 'Check';
+    checkBtn.onclick = ()=> {
+      const val = input.value.trim();
+      if(val === '') { showResult('Enter an answer', 'orange', div); return; }
+      let correct = false;
+      if(p.op === '/'){
+        const parts = val.split(/[ ,/]+/).map(s=>s.replace(/\D/g,'')).filter(Boolean).map(Number);
+        if(parts.length===0) { correct=false; }
+        else { correct = parts[0] === Math.floor(p.answer); }
+      } else {
+        const num = Number(val);
+        correct = !Number.isNaN(num) && num === p.answer;
+      }
+      if(correct) showResult('Correct ✓', 'green', div);
+      else showResult('Wrong ✗ — Answer: ' + formatAnswer(p), 'red', div);
+    };
+
+    const showBtn = document.createElement('button');
+    showBtn.textContent = 'Reveal answer';
+    showBtn.onclick = ()=> { showResult('Answer: ' + formatAnswer(p), '#333', div); };
+
+    const controls = document.createElement('div');
+    controls.className = 'grid';
+    controls.appendChild(input);
+    controls.appendChild(checkBtn);
+    controls.appendChild(showBtn);
+    div.appendChild(controls);
+
+    if(autoShow === 'yes'){
+      showResult('Answer: ' + formatAnswer(p), '#333', div);
+    }
+
+    area.appendChild(div);
+  });
+}
+
+function formatAnswer(p){
+  if(p.op === '/'){
+    return `${p.answer}  remainder ${p.remainder || 0}`;
+  }
+  return String(p.answer);
+}
+
+function showResult(text, color, parent){
+  let node = parent.querySelector('.result');
+  if(!node){
+    node = document.createElement('div');
+    node.className = 'result';
+    parent.appendChild(node);
+  }
+  node.textContent = text;
+  node.style.color = color;
+}
+
+// wire up
+document.getElementById('generate').addEventListener('click', ()=>{
+  const op = document.getElementById('op').value;
+  const level = document.getElementById('level').value;
+  const count = Math.max(1, Math.min(50, Number(document.getElementById('count').value || 5)));
+  const autoShow = document.getElementById('autoShow').value;
+  const problems = [];
+  for(let i=0;i<count;i++){
+    problems.push(generateProblem(op, level));
+  }
+  renderProblems(problems, autoShow);
+});
+
+// initial generate
+document.getElementById('generate').click();
